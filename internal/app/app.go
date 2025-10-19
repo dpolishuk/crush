@@ -150,16 +150,16 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 	messageEvents := app.Messages.Subscribe(ctx)
 	messageReadBytes := make(map[string]int)
 
-	defer fmt.Printf(ansi.ResetProgressBar)
 	for {
 		// HACK: add it again on every iteration so it doesn't get hidden by
 		// the terminal due to inactivity.
-		fmt.Printf(ansi.SetIndeterminateProgressBar)
+		fmt.Print(quietSetIndeterminateProgress)
 		select {
 		case result := <-done:
 			stopSpinner()
 
 			if result.Error != nil {
+				fmt.Print(quietResetProgress)
 				if errors.Is(result.Error, context.Canceled) || errors.Is(result.Error, agent.ErrRequestCancelled) {
 					slog.Info("Non-interactive: agent processing cancelled", "session_id", sess.ID)
 					return nil
@@ -172,12 +172,14 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 
 			if len(msgContent) < readBts {
 				slog.Error("Non-interactive: message content is shorter than read bytes", "message_length", len(msgContent), "read_bytes", readBts)
+				fmt.Print(quietResetProgress)
 				return fmt.Errorf("message content is shorter than read bytes: %d < %d", len(msgContent), readBts)
 			}
 			fmt.Println(msgContent[readBts:])
 			messageReadBytes[result.Message.ID] = len(msgContent)
 
 			slog.Info("Non-interactive: run completed", "session_id", sess.ID)
+			fmt.Print(ansi.ResetProgressBar)
 			return nil
 
 		case event := <-messageEvents:
@@ -190,6 +192,7 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 
 				if len(content) < readBytes {
 					slog.Error("Non-interactive: message content is shorter than read bytes", "message_length", len(content), "read_bytes", readBytes)
+					fmt.Print(quietResetProgress)
 					return fmt.Errorf("message content is shorter than read bytes: %d < %d", len(content), readBytes)
 				}
 
@@ -200,6 +203,7 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 
 		case <-ctx.Done():
 			stopSpinner()
+			fmt.Print(quietResetProgress)
 			return ctx.Err()
 		}
 	}
